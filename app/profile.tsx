@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   SafeAreaView,
   Switch,
   Alert,
+  Platform,
+  Appearance,
+  I18nManager,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import {
@@ -24,12 +27,16 @@ import {
   ChevronRight,
   Activity,
   Database,
+  Globe as LanguageIcon,
 } from 'lucide-react-native';
+import { useTheme } from '@/context/ThemeContext';
+import { useI18n } from '@/context/I18nContext';
 
 interface SettingItem {
   id: string;
-  title: string;
-  subtitle?: string;
+  titleKey: string;
+  subtitleKey?: string;
+  subtitleParams?: object;
   icon: React.ReactNode;
   type: 'navigation' | 'toggle' | 'action';
   value?: boolean;
@@ -38,9 +45,12 @@ interface SettingItem {
 }
 
 export default function ProfileScreen() {
-  const [darkMode, setDarkMode] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const { t, locale, setLocale } = useI18n();
   const [notifications, setNotifications] = useState(true);
   const [autoSync, setAutoSync] = useState(true);
+
+  // Removed Appearance listener as ThemeContext handles system theme changes more robustly
 
   const userStats = {
     tasksCompleted: 127,
@@ -49,151 +59,181 @@ export default function ProfileScreen() {
     uptime: '99.8%',
   };
 
+  const handleToggleTheme = () => {
+    toggleTheme();
+  };
+
+  const handleToggleLanguage = () => {
+    const newLang = locale === 'en' ? 'ar' : 'en';
+    setLocale(newLang);
+    I18nManager.forceRTL(newLang === 'ar');
+    // Consider a more graceful way to reload the app or specific components if needed for full RTL/LTR switch
+    Alert.alert(t('languageChanged'), t('languageSetTo', { languageName: newLang === 'ar' ? t('languageArabic') : t('languageEnglish') }));
+  };
+
   const settingsData: SettingItem[] = [
     {
       id: 'appearance',
-      title: 'Dark Mode',
-      subtitle: 'Switch between light and dark themes',
-      icon: darkMode ? <Moon color="#64748B" size={20} /> : <Sun color="#64748B" size={20} />,
+      titleKey: 'darkMode',
+      subtitleKey: 'darkModeSubtitle',
+      icon: theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />,
       type: 'toggle',
-      value: darkMode,
-      onToggle: setDarkMode,
+      value: theme === 'dark',
+      onToggle: handleToggleTheme,
+    },
+    {
+      id: 'language',
+      titleKey: 'language',
+      subtitleKey: locale === 'en' ? 'languageEnglish' : 'languageArabic',
+      icon: <LanguageIcon size={20} />,
+      type: 'navigation',
+      onPress: handleToggleLanguage,
     },
     {
       id: 'notifications',
-      title: 'Notifications',
-      subtitle: 'Task completion and status updates',
-      icon: <Bell color="#64748B" size={20} />,
+      titleKey: 'notifications',
+      subtitleKey: 'notificationsSubtitle',
+      icon: <Bell size={20} />,
       type: 'toggle',
       value: notifications,
-      onToggle: setNotifications,
+      onToggle: (value) => {
+        setNotifications(value);
+        Alert.alert(t('notifications'), value ? t('notificationsEnabled') : t('notificationsDisabled'));
+      },
     },
     {
       id: 'autosync',
-      title: 'Auto Sync',
-      subtitle: 'Automatically sync data across devices',
-      icon: <Wifi color="#64748B" size={20} />,
+      titleKey: 'autoSync',
+      subtitleKey: 'autoSyncSubtitle',
+      icon: <Wifi size={20} />,
       type: 'toggle',
       value: autoSync,
-      onToggle: setAutoSync,
+      onToggle: (value) => {
+        setAutoSync(value);
+        Alert.alert(t('autoSync'), value ? t('autoSyncEnabled') : t('autoSyncDisabled'));
+      },
     },
     {
       id: 'privacy',
-      title: 'Privacy & Security',
-      subtitle: 'Manage your data and privacy settings',
-      icon: <Shield color="#64748B" size={20} />,
+      titleKey: 'privacySecurity',
+      subtitleKey: 'privacySecuritySubtitle',
+      icon: <Shield size={20} />,
       type: 'navigation',
-      onPress: () => Alert.alert('Privacy & Security', 'Feature coming soon'),
+      onPress: () => Alert.alert(t('privacySecurity'), t('privacySecurityComingSoon')),
     },
     {
       id: 'help',
-      title: 'Help & Support',
-      subtitle: 'Get help and contact support',
-      icon: <HelpCircle color="#64748B" size={20} />,
+      titleKey: 'helpSupport',
+      subtitleKey: 'helpSupportSubtitle',
+      icon: <HelpCircle size={20} />,
       type: 'navigation',
-      onPress: () => Alert.alert('Help & Support', 'Feature coming soon'),
+      onPress: () => Alert.alert(t('helpSupport'), t('helpSupportComingSoon')),
     },
     {
       id: 'rate',
-      title: 'Rate Manus AI',
-      subtitle: 'Share your experience with others',
-      icon: <Star color="#64748B" size={20} />,
+      titleKey: 'rateManusAI',
+      subtitleKey: 'rateManusAISubtitle',
+      icon: <Star size={20} />,
       type: 'navigation',
-      onPress: () => Alert.alert('Rate App', 'Thank you for your feedback!'),
+      onPress: () => Alert.alert(t('rateManusAI'), t('rateAppThanks')),
     },
   ];
+
+  const dynamicStyles = getDynamicStyles(theme, locale);
 
   const renderSettingItem = ({ item, index }: { item: SettingItem; index: number }) => (
     <Animated.View
       entering={FadeInDown.duration(300).delay(index * 50)}
-      style={styles.settingItem}
+      style={dynamicStyles.settingItem}
     >
       <TouchableOpacity
-        style={styles.settingContent}
+        style={dynamicStyles.settingContent}
         onPress={item.onPress}
         disabled={item.type === 'toggle'}
+        activeOpacity={0.7}
       >
-        <View style={styles.settingIcon}>
-          {item.icon}
+        <View style={dynamicStyles.settingIcon}>
+          {React.cloneElement(item.icon as React.ReactElement, { color: theme === 'dark' ? '#A5B4FC' : '#64748B' })}
         </View>
-        <View style={styles.settingText}>
-          <Text style={styles.settingTitle}>{item.title}</Text>
-          {item.subtitle && (
-            <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
+        <View style={dynamicStyles.settingText}>
+          <Text style={dynamicStyles.settingTitle}>{t(item.titleKey)}</Text>
+          {item.subtitleKey && (
+            <Text style={dynamicStyles.settingSubtitle}>{t(item.subtitleKey, item.subtitleParams)}</Text>
           )}
         </View>
-        <View style={styles.settingAction}>
+        <View style={dynamicStyles.settingAction}>
           {item.type === 'toggle' ? (
             <Switch
               value={item.value}
               onValueChange={item.onToggle}
-              trackColor={{ false: '#E2E8F0', true: '#1E40AF' }}
-              thumbColor={item.value ? '#FFFFFF' : '#FFFFFF'}
+              trackColor={{ false: theme === 'dark' ? '#334155' : '#E2E8F0', true: theme === 'dark' ? '#4F46E5' : '#1E40AF' }}
+              thumbColor={item.value ? (Platform.OS === 'ios' ? '#FFFFFF' : (theme === 'dark' ? '#A5B4FC' : '#FFFFFF')) : '#FFFFFF'}
+              ios_backgroundColor={theme === 'dark' ? '#334155' : '#E2E8F0'}
             />
           ) : (
-            <ChevronRight color="#94A3B8" size={16} />
+            <ChevronRight color={theme === 'dark' ? '#94A3B8' : '#94A3B8'} size={16} style={{ transform: [{ scaleX: locale === 'ar' ? -1 : 1 }] }} />
           )}
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 
-  const renderStatCard = (title: string, value: string, icon: React.ReactNode, index: number) => (
+  const renderStatCard = (titleKey: string, value: string, icon: React.ReactNode, index: number) => (
     <Animated.View
-      key={title}
+      key={titleKey}
       entering={FadeInDown.duration(300).delay(200 + index * 100)}
-      style={styles.statCard}
+      style={dynamicStyles.statCard}
     >
-      <View style={styles.statIcon}>
-        {icon}
+      <View style={dynamicStyles.statIcon}>
+        {React.cloneElement(icon as React.ReactElement, { color: theme === 'dark' ? '#A5B4FC' : (icon as React.ReactElement).props.color || '#1E40AF' })}
       </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statTitle}>{title}</Text>
+      <Text style={dynamicStyles.statValue}>{value}</Text>
+      <Text style={dynamicStyles.statTitle}>{t(titleKey)}</Text>
     </Animated.View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Animated.View 
-        style={styles.header}
+    <SafeAreaView style={dynamicStyles.container}>
+      <Animated.View
+        style={dynamicStyles.header}
         entering={FadeInUp.duration(400)}
       >
-        <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
-            <User color="#1E40AF" size={32} />
+        <View style={dynamicStyles.profileHeader}>
+          <View style={dynamicStyles.avatar}>
+            <User color={theme === 'dark' ? '#A5B4FC' : '#1E40AF'} size={32} />
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.userName}>Manus User</Text>
-            <Text style={styles.userEmail}>user@manus.ai</Text>
+          <View style={dynamicStyles.profileInfo}>
+            <Text style={dynamicStyles.userName}>{t('profileUserName')}</Text>
+            <Text style={dynamicStyles.userEmail}>{t('profileUserEmail')}</Text>
           </View>
-          <TouchableOpacity style={styles.editButton}>
-            <Settings color="#64748B" size={20} />
+          <TouchableOpacity style={dynamicStyles.editButton} onPress={() => Alert.alert(t('editProfile'), t('editProfileComingSoon'))}>
+            <Settings color={theme === 'dark' ? '#CBD5E1' : '#64748B'} size={20} />
           </TouchableOpacity>
         </View>
       </Animated.View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <Animated.View 
-          style={styles.statsSection}
+      <ScrollView style={dynamicStyles.content} showsVerticalScrollIndicator={false}>
+        <Animated.View
+          style={dynamicStyles.statsSection}
           entering={FadeInDown.duration(400).delay(200)}
         >
-          <Text style={styles.sectionTitle}>Usage Statistics</Text>
-          <View style={styles.statsGrid}>
-            {renderStatCard('Tasks Completed', userStats.tasksCompleted.toString(), <Activity color="#10B981" size={20} />, 0)}
-            {renderStatCard('Conversations', userStats.totalConversations.toString(), <User color="#3B82F6" size={20} />, 1)}
-            {renderStatCard('Data Processed', userStats.dataProcessed, <Database color="#8B5CF6" size={20} />, 2)}
-            {renderStatCard('Uptime', userStats.uptime, <Wifi color="#F59E0B" size={20} />, 3)}
+          <Text style={dynamicStyles.sectionTitle}>{t('usageStatistics')}</Text>
+          <View style={dynamicStyles.statsGrid}>
+            {renderStatCard('tasksCompletedStat', userStats.tasksCompleted.toString(), <Activity color="#10B981" size={20} />, 0)}
+            {renderStatCard('conversationsStat', userStats.totalConversations.toString(), <User color="#3B82F6" size={20} />, 1)}
+            {renderStatCard('dataProcessedStat', userStats.dataProcessed, <Database color="#8B5CF6" size={20} />, 2)}
+            {renderStatCard('uptimeStat', userStats.uptime, <Wifi color="#F59E0B" size={20} />, 3)}
           </View>
         </Animated.View>
 
-        <View style={styles.settingsSection}>
-          <Animated.Text 
-            style={styles.sectionTitle}
+        <View style={dynamicStyles.settingsSection}>
+          <Animated.Text
+            style={dynamicStyles.sectionTitle}
             entering={FadeInDown.duration(400).delay(400)}
           >
-            Settings
+            {t('settings')}
           </Animated.Text>
-          <View style={styles.settingsList}>
+          <View style={dynamicStyles.settingsList}>
             {settingsData.map((item, index) => (
               <View key={item.id}>
                 {renderSettingItem({ item, index })}
@@ -202,43 +242,44 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Animated.View 
-          style={styles.dangerSection}
-          entering={FadeInDown.duration(400).delay(800)}
+        <Animated.View
+          style={dynamicStyles.dangerSection}
+          entering={FadeInDown.duration(400).delay(600)}
         >
-          <TouchableOpacity 
-            style={styles.dangerButton}
-            onPress={() => Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Sign Out', style: 'destructive' },
+          <TouchableOpacity
+            style={dynamicStyles.dangerButton}
+            onPress={() => Alert.alert(t('signOut'), t('signOutConfirmation'), [
+              { text: t('cancel'), style: 'cancel' },
+              { text: t('signOut'), style: 'destructive', onPress: () => Alert.alert(t('signOut'), t('signedOutSuccess')) },
             ])}
           >
-            <LogOut color="#EF4444" size={20} />
-            <Text style={styles.dangerText}>Sign Out</Text>
+            <LogOut color={theme === 'dark' ? '#FCA5A5' : '#EF4444'} size={20} />
+            <Text style={dynamicStyles.dangerText}>{t('signOut')}</Text>
           </TouchableOpacity>
         </Animated.View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Manus AI Agent v1.0.0</Text>
-          <Text style={styles.footerSubtext}>Made with ❤️ by the Manus Team</Text>
+        <View style={dynamicStyles.footer}>
+          <Text style={dynamicStyles.footerText}>{t('appVersion')}</Text>
+          <Text style={dynamicStyles.footerSubtext}>{t('madeWithLove')}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const getDynamicStyles = (theme: 'light' | 'dark', locale: 'en' | 'ar') => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: theme === 'dark' ? '#0F172A' : '#F8FAFC',
   },
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+    paddingTop: Platform.OS === 'ios' ? 50 : 0,
   },
   profileHeader: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     alignItems: 'center',
     padding: 20,
   },
@@ -246,56 +287,64 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: theme === 'dark' ? '#334155' : '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: locale === 'ar' ? 0 : 16,
+    marginLeft: locale === 'ar' ? 16 : 0,
   },
   profileInfo: {
     flex: 1,
+    alignItems: locale === 'ar' ? 'flex-end' : 'flex-start',
   },
   userName: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#F1F5F9' : '#0F172A',
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   userEmail: {
     fontSize: 14,
-    color: '#64748B',
+    color: theme === 'dark' ? '#94A3B8' : '#64748B',
     marginTop: 2,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   editButton: {
     padding: 8,
+    marginLeft: locale === 'ar' ? 0 : 'auto',
+    marginRight: locale === 'ar' ? 'auto' : 0,
   },
   content: {
     flex: 1,
   },
   statsSection: {
     padding: 20,
+    alignItems: locale === 'ar' ? 'flex-end' : 'flex-start',
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#E2E8F0' : '#0F172A',
     marginBottom: 16,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   statsGrid: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   statCard: {
     width: '48%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: theme === 'dark' ? '#000000' : '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme === 'dark' ? 0.2 : 0.1,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: theme === 'dark' ? 3 : 2,
   },
   statIcon: {
     marginBottom: 8,
@@ -303,74 +352,86 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#F1F5F9' : '#0F172A',
     marginBottom: 4,
   },
   statTitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: theme === 'dark' ? '#94A3B8' : '#64748B',
     textAlign: 'center',
   },
   settingsSection: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+    alignItems: locale === 'ar' ? 'flex-end' : 'flex-start',
   },
   settingsList: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: theme === 'dark' ? '#000000' : '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme === 'dark' ? 0.2 : 0.1,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: theme === 'dark' ? 3 : 2,
+    width: '100%',
   },
   settingItem: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: theme === 'dark' ? '#334155' : '#F1F5F9',
   },
   settingContent: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
   settingIcon: {
-    marginRight: 16,
+    marginRight: locale === 'ar' ? 0 : 16,
+    marginLeft: locale === 'ar' ? 16 : 0,
+    width: 24,
+    alignItems: 'center',
   },
   settingText: {
     flex: 1,
+    alignItems: locale === 'ar' ? 'flex-end' : 'flex-start',
   },
   settingTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#E2E8F0' : '#0F172A',
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   settingSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: theme === 'dark' ? '#94A3B8' : '#64748B',
     marginTop: 2,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   settingAction: {
-    marginLeft: 12,
+    marginLeft: locale === 'ar' ? 0 : 12,
+    marginRight: locale === 'ar' ? 12 : 0,
   },
   dangerSection: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+    marginTop: 10,
   },
   dangerButton: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#3F1A1A' : '#FEF2F2',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#FEE2E2',
+    borderColor: theme === 'dark' ? '#7F1D1D' : '#FEE2E2',
   },
   dangerText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#EF4444',
-    marginLeft: 8,
+    color: theme === 'dark' ? '#FCA5A5' : '#EF4444',
+    marginLeft: locale === 'ar' ? 0 : 8,
+    marginRight: locale === 'ar' ? 8 : 0,
   },
   footer: {
     alignItems: 'center',
@@ -378,11 +439,11 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: theme === 'dark' ? '#64748B' : '#94A3B8',
   },
   footerSubtext: {
     fontSize: 10,
-    color: '#CBD5E1',
+    color: theme === 'dark' ? '#475569' : '#CBD5E1',
     marginTop: 4,
   },
 });

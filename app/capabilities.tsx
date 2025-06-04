@@ -6,6 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Alert,
+  Platform,
+  FlatList,
+  I18nManager,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import {
@@ -17,160 +21,220 @@ import {
   Settings,
   BarChart3,
   MessageSquare,
-  Download,
-  Upload,
   Zap,
   Brain,
+  ChevronRight,
 } from 'lucide-react-native';
+import { useTheme } from '@/context/ThemeContext';
+import { useI18n } from '@/context/I18nContext';
+import { useRouter } from 'expo-router';
 
 interface Capability {
   id: string;
-  title: string;
-  description: string;
+  titleKey: string;
+  descriptionKey: string;
   icon: React.ReactNode;
   color: string;
-  category: 'research' | 'development' | 'analysis' | 'automation';
+  darkColor?: string;
+  category: 'research' | 'development' | 'analysis' | 'automation' | 'general';
+  action?: () => void;
 }
 
-const capabilities: Capability[] = [
+const capabilitiesData: Capability[] = [
   {
     id: '1',
-    title: 'Information Research',
-    description: 'Gather comprehensive data from multiple sources',
+    titleKey: 'capabilityInformationResearchTitle',
+    descriptionKey: 'capabilityInformationResearchDescription',
     icon: <Search color="#FFFFFF" size={24} />,
     color: '#3B82F6',
+    darkColor: '#60A5FA',
     category: 'research',
   },
   {
     id: '2',
-    title: 'Data Analysis',
-    description: 'Process and analyze complex datasets',
+    titleKey: 'capabilityDataAnalysisTitle',
+    descriptionKey: 'capabilityDataAnalysisDescription',
     icon: <BarChart3 color="#FFFFFF" size={24} />,
     color: '#8B5CF6',
+    darkColor: '#A78BFA',
     category: 'analysis',
   },
   {
     id: '3',
-    title: 'Code Generation',
-    description: 'Write and optimize code in multiple languages',
+    titleKey: 'capabilityCodeGenerationTitle',
+    descriptionKey: 'capabilityCodeGenerationDescription',
     icon: <Code color="#FFFFFF" size={24} />,
     color: '#10B981',
+    darkColor: '#34D399',
     category: 'development',
   },
   {
     id: '4',
-    title: 'Content Writing',
-    description: 'Create articles, reports, and documentation',
+    titleKey: 'capabilityContentWritingTitle',
+    descriptionKey: 'capabilityContentWritingDescription',
     icon: <FileText color="#FFFFFF" size={24} />,
     color: '#F59E0B',
+    darkColor: '#FBBF24',
     category: 'research',
   },
   {
     id: '5',
-    title: 'Web Automation',
-    description: 'Automate browser tasks and web interactions',
+    titleKey: 'capabilityWebAutomationTitle',
+    descriptionKey: 'capabilityWebAutomationDescription',
     icon: <Globe color="#FFFFFF" size={24} />,
     color: '#EF4444',
+    darkColor: '#F87171',
     category: 'automation',
   },
   {
     id: '6',
-    title: 'Database Operations',
-    description: 'Query, analyze, and manage databases',
+    titleKey: 'capabilityDatabaseManagementTitle',
+    descriptionKey: 'capabilityDatabaseManagementDescription',
     icon: <Database color="#FFFFFF" size={24} />,
     color: '#6366F1',
+    darkColor: '#818CF8',
     category: 'development',
   },
   {
     id: '7',
-    title: 'File Processing',
-    description: 'Read, write, and manipulate various file formats',
+    titleKey: 'capabilityFileSystemOperationsTitle',
+    descriptionKey: 'capabilityFileSystemOperationsDescription',
     icon: <Upload color="#FFFFFF" size={24} />,
     color: '#14B8A6',
+    darkColor: '#2DD4BF',
     category: 'automation',
   },
   {
     id: '8',
-    title: 'System Integration',
-    description: 'Connect and configure various tools and services',
+    titleKey: 'capabilitySystemConfigurationTitle',
+    descriptionKey: 'capabilitySystemConfigurationDescription',
     icon: <Settings color="#FFFFFF" size={24} />,
     color: '#84CC16',
+    darkColor: '#A3E635',
     category: 'automation',
+  },
+  {
+    id: '9',
+    titleKey: 'capabilityGeneralProblemSolvingTitle',
+    descriptionKey: 'capabilityGeneralProblemSolvingDescription',
+    icon: <Brain color="#FFFFFF" size={24} />,
+    color: '#EC4899',
+    darkColor: '#F472B6',
+    category: 'general',
   },
 ];
 
 const categories = [
-  { key: 'research', label: 'Research & Analysis', icon: Brain },
-  { key: 'development', label: 'Development', icon: Code },
-  { key: 'analysis', label: 'Data Analysis', icon: BarChart3 },
-  { key: 'automation', label: 'Automation', icon: Zap },
+  { key: 'research', labelKey: 'research', icon: Search },
+  { key: 'development', labelKey: 'development', icon: Code },
+  { key: 'analysis', labelKey: 'analysis', icon: BarChart3 },
+  { key: 'automation', labelKey: 'automation', icon: Zap },
+  { key: 'general', labelKey: 'general', icon: Brain },
 ] as const;
 
 export default function CapabilitiesScreen() {
-  const [selectedCategory, setSelectedCategory] = React.useState<string>('research');
+  const { theme } = useTheme();
+  const { t, locale } = useI18n();
+  const router = useRouter();
+  const [selectedCategory, setSelectedCategory] = React.useState<Capability['category']>(categories[0].key);
 
-  const filteredCapabilities = capabilities.filter(
+  const handleCapabilityPress = (capability: Capability) => {
+    const translatedTitle = t(capability.titleKey);
+    if (capability.action) {
+      capability.action();
+    } else {
+      Alert.alert(
+        t('startChatActionTitle', { title: translatedTitle }),
+        t('startChatActionMessage', { title: translatedTitle }),
+        [
+          { text: t('cancel'), style: "cancel" },
+          { text: t('startChat'), onPress: () => router.push({ pathname: '/', params: { prefill: t('prefillHelpWith', { defaultValue: 'I need help with {{title}}.', title: translatedTitle.toLowerCase() }) }}) }
+        ]
+      );
+    }
+  };
+
+  const handleQuickStartPress = (actionKey: string, prefillMessageKey: string, prefillParams?: object) => {
+    Alert.alert(
+      t(actionKey),
+      t('startChatActionMessage', { title: t(prefillMessageKey, prefillParams) }),
+      [
+        { text: t('cancel'), style: "cancel" },
+        { text: t('startChat'), onPress: () => router.push({ pathname: '/', params: { prefill: t(prefillMessageKey, prefillParams) }}) }
+      ]
+    );
+  };
+
+  const filteredCapabilities = capabilitiesData.filter(
     (capability) => capability.category === selectedCategory
   );
+
+  const dynamicStyles = getDynamicStyles(theme, locale);
 
   const renderCapabilityCard = ({ item, index }: { item: Capability; index: number }) => (
     <Animated.View
       entering={FadeInDown.duration(300).delay(index * 100)}
-      style={styles.capabilityCard}
+      style={dynamicStyles.capabilityCard}
     >
-      <TouchableOpacity style={styles.cardContent}>
-        <View style={[styles.iconContainer, { backgroundColor: item.color }]}>
+      <TouchableOpacity
+        style={dynamicStyles.cardContent}
+        onPress={() => handleCapabilityPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={[dynamicStyles.iconContainer, { backgroundColor: theme === 'dark' ? (item.darkColor || item.color) : item.color }]}>
           {item.icon}
         </View>
-        <View style={styles.cardText}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.cardDescription}>{item.description}</Text>
+        <View style={dynamicStyles.cardText}>
+          <Text style={dynamicStyles.cardTitle}>{t(item.titleKey)}</Text>
+          <Text style={dynamicStyles.cardDescription}>{t(item.descriptionKey)}</Text>
         </View>
-        <View style={styles.cardArrow}>
-          <Text style={styles.arrowText}>›</Text>
+        <View style={dynamicStyles.cardArrow}>
+          <ChevronRight color={theme === 'dark' ? '#64748B' : '#94A3B8'} size={20} />
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Animated.View 
-        style={styles.header}
+    <SafeAreaView style={dynamicStyles.container}>
+      <Animated.View
+        style={dynamicStyles.header}
         entering={FadeInUp.duration(400)}
       >
-        <Text style={styles.headerTitle}>Capabilities</Text>
-        <Text style={styles.headerSubtitle}>Explore what Manus AI can do for you</Text>
+        <Text style={dynamicStyles.headerTitle}>{t('capabilities')}</Text>
+        <Text style={dynamicStyles.headerSubtitle}>{t('capabilitiesHeaderSubtitle')}</Text>
       </Animated.View>
 
-      <View style={styles.categoryContainer}>
-        <ScrollView 
-          horizontal 
+      <View style={dynamicStyles.categoryContainer}>
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScrollContent}
+          contentContainerStyle={dynamicStyles.categoryScrollContent}
         >
           {categories.map((category) => {
             const IconComponent = category.icon;
+            const isActive = selectedCategory === category.key;
             return (
               <TouchableOpacity
                 key={category.key}
                 style={[
-                  styles.categoryButton,
-                  selectedCategory === category.key && styles.categoryButtonActive,
+                  dynamicStyles.categoryButton,
+                  isActive && dynamicStyles.categoryButtonActive,
                 ]}
                 onPress={() => setSelectedCategory(category.key)}
+                activeOpacity={0.7}
               >
-                <IconComponent 
-                  color={selectedCategory === category.key ? '#FFFFFF' : '#64748B'} 
-                  size={18} 
+                <IconComponent
+                  color={isActive ? '#FFFFFF' : (theme === 'dark' ? '#CBD5E1' : '#64748B')}
+                  size={18}
                 />
                 <Text
                   style={[
-                    styles.categoryText,
-                    selectedCategory === category.key && styles.categoryTextActive,
+                    dynamicStyles.categoryText,
+                    isActive && dynamicStyles.categoryTextActive,
                   ]}
                 >
-                  {category.label}
+                  {t(category.labelKey)}
                 </Text>
               </TouchableOpacity>
             );
@@ -178,116 +242,145 @@ export default function CapabilitiesScreen() {
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.capabilitiesGrid}>
-          {filteredCapabilities.map((capability, index) => (
-            <View key={capability.id}>
-              {renderCapabilityCard({ item: capability, index })}
-            </View>
-          ))}
-        </View>
+      <FlatList
+        data={filteredCapabilities}
+        renderItem={renderCapabilityCard}
+        keyExtractor={(item) => item.id}
+        style={[dynamicStyles.content, { transform: [{ scaleX: locale === 'ar' ? -1 : 1 }] }]}
+        contentContainerStyle={dynamicStyles.capabilitiesGrid}
+        showsVerticalScrollIndicator={false}
+        ListFooterComponent={
+          <Animated.View
+            style={dynamicStyles.quickStartSection}
+            entering={FadeInDown.duration(400).delay(filteredCapabilities.length * 100 + 200)}
+          >
+            <Text style={dynamicStyles.sectionTitle}>{t('quickStart')}</Text>
+            <Text style={dynamicStyles.sectionDescription}>
+              {t('quickStartDescription')}
+            </Text>
 
-        <Animated.View 
-          style={styles.quickStartSection}
-          entering={FadeInDown.duration(400).delay(600)}
-        >
-          <Text style={styles.sectionTitle}>Quick Start</Text>
-          <Text style={styles.sectionDescription}>
-            Get started quickly with these common workflows
-          </Text>
-          
-          <View style={styles.quickStartCards}>
-            <TouchableOpacity style={styles.quickStartCard}>
-              <MessageSquare color="#1E40AF" size={20} />
-              <Text style={styles.quickStartText}>Ask a Question</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.quickStartCard}>
-              <Search color="#1E40AF" size={20} />
-              <Text style={styles.quickStartText}>Research Topic</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.quickStartCard}>
-              <Code color="#1E40AF" size={20} />
-              <Text style={styles.quickStartText}>Generate Code</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </ScrollView>
+            <View style={dynamicStyles.quickStartCards}>
+              <TouchableOpacity
+                style={dynamicStyles.quickStartCard}
+                onPress={() => handleQuickStartPress('askAQuestion', 'prefillAskQuestion', { defaultValue: 'I have a question about...' })}
+                activeOpacity={0.7}
+              >
+                <MessageSquare color={theme === 'dark' ? '#A5B4FC' : '#1E40AF'} size={20} />
+                <Text style={dynamicStyles.quickStartText}>{t('askAQuestion')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={dynamicStyles.quickStartCard}
+                onPress={() => handleQuickStartPress('researchTopic', 'prefillResearchTopic', { defaultValue: 'Can you research the topic of...' })}
+                activeOpacity={0.7}
+              >
+                <Search color={theme === 'dark' ? '#A5B4FC' : '#1E40AF'} size={20} />
+                <Text style={dynamicStyles.quickStartText}>{t('researchTopic')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={dynamicStyles.quickStartCard}
+                onPress={() => handleQuickStartPress('generateCode', 'prefillGenerateCode', { defaultValue: 'Please generate code for...' })}
+                activeOpacity={0.7}
+              >
+                <Code color={theme === 'dark' ? '#A5B4FC' : '#1E40AF'} size={20} />
+                <Text style={dynamicStyles.quickStartText}>{t('generateCode')}</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        }
+        ListEmptyComponent={
+          <Animated.View style={dynamicStyles.emptyState} entering={FadeInDown.duration(300)}>
+            <Zap color={theme === 'dark' ? '#64748B' : '#94A3B8'} size={48} />
+            <Text style={dynamicStyles.emptyTitle}>{t('noCapabilitiesFound')}</Text>
+            <Text style={dynamicStyles.emptySubtitle}>{t('selectDifferentCategory')}</Text>
+          </Animated.View>
+        }
+      />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const getDynamicStyles = (theme: 'light' | 'dark', locale: 'en' | 'ar') => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: theme === 'dark' ? '#0F172A' : '#F8FAFC',
   },
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     paddingVertical: 20,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    alignItems: locale === 'ar' ? 'flex-end' : 'flex-start',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#F1F5F9' : '#0F172A',
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#64748B',
+    color: theme === 'dark' ? '#94A3B8' : '#64748B',
     marginTop: 4,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   categoryContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
   },
   categoryScrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
   },
   categoryButton: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 12,
-    backgroundColor: '#F1F5F9',
+    marginRight: locale === 'ar' ? 0 : 10,
+    marginLeft: locale === 'ar' ? 10 : 0,
+    backgroundColor: theme === 'dark' ? '#334155' : '#F1F5F9',
   },
   categoryButtonActive: {
-    backgroundColor: '#1E40AF',
+    backgroundColor: theme === 'dark' ? '#4F46E5' : '#1E40AF',
   },
   categoryText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#64748B',
-    marginLeft: 6,
+    color: theme === 'dark' ? '#CBD5E1' : '#64748B',
+    marginLeft: locale === 'ar' ? 0 : 6,
+    marginRight: locale === 'ar' ? 6 : 0,
   },
   categoryTextActive: {
     color: '#FFFFFF',
   },
   content: {
     flex: 1,
+    transform: for FlatList itself is applied inline
   },
   capabilitiesGrid: {
     padding: 16,
   },
   capabilityCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     borderRadius: 12,
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: theme === 'dark' ? '#000000' : '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme === 'dark' ? 0.2 : 0.1,
     shadowRadius: 3,
-    elevation: 2,
+    elevation: theme === 'dark' ? 3 : 2,
+    transform: [{ scaleX: locale === 'ar' ? -1 : 1 }],
   },
   cardContent: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     alignItems: 'center',
     padding: 16,
   },
@@ -297,68 +390,98 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: locale === 'ar' ? 0 : 16,
+    marginLeft: locale === 'ar' ? 16 : 0,
   },
   cardText: {
     flex: 1,
+    alignItems: locale === 'ar' ? 'flex-end' : 'flex-start',
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#E2E8F0' : '#0F172A',
     marginBottom: 4,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   cardDescription: {
     fontSize: 14,
-    color: '#64748B',
+    color: theme === 'dark' ? '#9CA3AF' : '#64748B',
     lineHeight: 20,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   cardArrow: {
-    padding: 8,
-  },
-  arrowText: {
-    fontSize: 20,
-    color: '#94A3B8',
-    fontWeight: '300',
+    paddingLeft: locale === 'ar' ? 0 : 8,
+    paddingRight: locale === 'ar' ? 8 : 0,
+    transform: [{ scaleX: locale === 'ar' ? -1 : 1 }],
   },
   quickStartSection: {
-    backgroundColor: '#FFFFFF',
-    margin: 16,
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
     borderRadius: 12,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: theme === 'dark' ? '#000000' : '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme === 'dark' ? 0.2 : 0.1,
     shadowRadius: 3,
-    elevation: 2,
+    elevation: theme === 'dark' ? 3 : 2,
+    transform: [{ scaleX: locale === 'ar' ? -1 : 1 }],
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#E2E8F0' : '#0F172A',
     marginBottom: 4,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   sectionDescription: {
     fontSize: 14,
-    color: '#64748B',
+    color: theme === 'dark' ? '#9CA3AF' : '#64748B',
     marginBottom: 16,
+    textAlign: locale === 'ar' ? 'right' : 'left',
   },
   quickStartCards: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     justifyContent: 'space-between',
   },
   quickStartCard: {
     flex: 1,
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F8FAFC',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    backgroundColor: theme === 'dark' ? '#0F172A' : '#F8FAFC',
     borderRadius: 8,
     marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: theme === 'dark' ? '#334155' : '#E2E8F0',
   },
   quickStartText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#1E40AF',
+    color: theme === 'dark' ? '#A5B4FC' : '#1E40AF',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    marginTop: 50,
+    transform: [{ scaleX: locale === 'ar' ? -1 : 1 }],
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme === 'dark' ? '#CBD5E1' : '#64748B',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: theme === 'dark' ? '#94A3B8' : '#94A3B8',
     marginTop: 8,
     textAlign: 'center',
   },

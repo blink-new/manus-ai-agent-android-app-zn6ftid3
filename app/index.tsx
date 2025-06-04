@@ -9,30 +9,50 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Send, Bot } from 'lucide-react-native';
+import { useTheme } from '@/context/ThemeContext';
+import { useI18n } from '@/context/I18nContext';
+import { MessageBubble } from '@/components/MessageBubble';
+import { useLocalSearchParams } from 'expo-router';
 
 interface Message {
   id: string;
   text: string;
   isUser: boolean;
   timestamp: Date;
-  status?: 'sending' | 'sent' | 'delivered';
+  status?: 'sending' | 'sent' | 'delivered' | 'error';
 }
 
 export default function ChatScreen() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Hello! I\'m Manus, your AI assistant. I can help you with information gathering, data analysis, writing, coding, and much more. What would you like to work on today?',
-      isUser: false,
-      timestamp: new Date(),
-      status: 'delivered',
-    },
-  ]);
-  const [inputText, setInputText] = useState('');
+  const { theme } = useTheme();
+  const { t, locale } = useI18n();
+  const params = useLocalSearchParams<{ prefill?: string }>();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState(params.prefill || '');
+  const [isAiTyping, setIsAiTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    setMessages([
+      {
+        id: '1',
+        text: t('initialGreeting'),
+        isUser: false,
+        timestamp: new Date(),
+        status: 'delivered',
+      },
+    ]);
+  }, [t]);
+
+  useEffect(() => {
+    if (params.prefill) {
+      // This is a bit of a hack for expo-router, ideally, you'd navigate without the param
+      // For now, we just ensure it doesn't re-trigger if the component re-renders with same params
+    }
+  }, [params.prefill]);
 
   const sendMessage = () => {
     if (inputText.trim()) {
@@ -43,11 +63,11 @@ export default function ChatScreen() {
         timestamp: new Date(),
         status: 'sending',
       };
-      
+
       setMessages(prev => [...prev, userMessage]);
       setInputText('');
-      
-      // Simulate AI response
+      setIsAiTyping(true);
+
       setTimeout(() => {
         const aiResponse: Message = {
           id: (Date.now() + 1).toString(),
@@ -56,98 +76,114 @@ export default function ChatScreen() {
           timestamp: new Date(),
           status: 'delivered',
         };
+        setMessages(prev => prev.map(msg => msg.id === userMessage.id ? {...msg, status: 'delivered'} : msg));
         setMessages(prev => [...prev, aiResponse]);
-      }, 1500);
+        setIsAiTyping(false);
+      }, 1500 + Math.random() * 1000);
     }
   };
 
   const generateAIResponse = (userInput: string): string => {
+    const lowerInput = userInput.toLowerCase();
+    if (lowerInput.includes(t('hello').toLowerCase()) || lowerInput.includes(t('hi').toLowerCase())) {
+      return t('responseHello');
+    }
+    if (lowerInput.includes(t('howAreYou').toLowerCase())) {
+      return t('responseHowAreYou');
+    }
+    if (lowerInput.includes(t('thank').toLowerCase())) {
+      return t('responseThankYou');
+    }
+    if (lowerInput.includes(t('help').toLowerCase()) || lowerInput.includes(t('assist').toLowerCase())){
+        return t('responseHelp');
+    }
     const responses = [
-      "I understand you need help with that. Let me analyze this step by step and provide you with a comprehensive solution.",
-      "That's an interesting challenge! I'll break this down into manageable parts and walk you through the process.",
-      "I can definitely assist you with this task. Let me gather the relevant information and provide you with detailed guidance.",
-      "Great question! I'll use my capabilities to research this thoroughly and give you actionable insights.",
-      "I'm on it! This falls right into my expertise area. Let me process this information and deliver exactly what you need.",
+      t('genericResponse1'),
+      t('genericResponse2'),
+      t('genericResponse3'),
+      t('genericResponse4'),
+      t('genericResponse5'),
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   };
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => (
-    <Animated.View
-      entering={FadeInDown.duration(300).delay(index * 50)}
-      style={[
-        styles.messageContainer,
-        item.isUser ? styles.userMessage : styles.aiMessage,
-      ]}
-    >
-      {!item.isUser && (
-        <View style={styles.aiAvatar}>
-          <Bot color="#1E40AF" size={18} />
-        </View>
-      )}
-      <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.aiBubble]}>
-        <Text style={[styles.messageText, item.isUser ? styles.userText : styles.aiText]}>
-          {item.text}
-        </Text>
-        <Text style={styles.timestamp}>
-          {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
-      </View>
-    </Animated.View>
+    <MessageBubble message={item} index={index} />
   );
 
   useEffect(() => {
-    flatListRef.current?.scrollToEnd({ animated: true });
+    if (messages.length > 0) {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }
   }, [messages]);
 
+  const dynamicStyles = getDynamicStyles(theme, locale);
+
   return (
-    <SafeAreaView style={styles.container}>
-      <Animated.View 
-        style={styles.header}
+    <SafeAreaView style={dynamicStyles.container}>
+      <Animated.View
+        style={dynamicStyles.header}
         entering={FadeInUp.duration(400)}
       >
-        <View style={styles.headerContent}>
-          <View style={styles.statusIndicator} />
-          <Text style={styles.headerTitle}>Manus AI</Text>
-          <Text style={styles.headerSubtitle}>AI Assistant</Text>
+        <View style={dynamicStyles.headerContent}>
+          <View style={[dynamicStyles.statusIndicator, isAiTyping && dynamicStyles.typingIndicator]} />
+          <Text style={dynamicStyles.headerTitle}>{t('manusAI')}</Text>
+          <Text style={dynamicStyles.headerSubtitle}>{isAiTyping ? t('typing') : t('online')}</Text>
         </View>
       </Animated.View>
 
-      <KeyboardAvoidingView 
-        style={styles.chatContainer}
+      <KeyboardAvoidingView
+        style={dynamicStyles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? (Platform.Version > '10' ? 90 : 60) : 0}
       >
         <FlatList
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
-          style={styles.messagesList}
-          contentContainerStyle={styles.messagesContent}
+          style={dynamicStyles.messagesList}
+          contentContainerStyle={dynamicStyles.messagesContent}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          ListFooterComponent={
+            isAiTyping ? (
+              <View style={dynamicStyles.typingBubbleContainer}>
+                <View style={dynamicStyles.aiAvatarSmall}>
+                  <Bot color={theme === 'dark' ? '#A5B4FC' : '#1E40AF'} size={14} />
+                </View>
+                <View style={dynamicStyles.typingBubble}>
+                  <ActivityIndicator size="small" color={theme === 'dark' ? '#A5B4FC' : '#1E40AF'} />
+                </View>
+              </View>
+            ) : null
+          }
         />
 
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
+        <View style={dynamicStyles.inputContainer}>
+          <View style={dynamicStyles.inputWrapper}>
             <TextInput
-              style={styles.textInput}
+              style={dynamicStyles.textInput}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="Type your message..."
-              placeholderTextColor="#94A3B8"
+              placeholder={t('typeYourMessage')}
+              placeholderTextColor={theme === 'dark' ? '#64748B' : '#94A3B8'}
               multiline
               maxLength={500}
               onSubmitEditing={sendMessage}
               returnKeyType="send"
+              blurOnSubmit={false}
+              textAlign={locale === 'ar' ? 'right' : 'left'}
             />
             <TouchableOpacity
-              style={[styles.sendButton, inputText.trim() ? styles.sendButtonActive : null]}
+              style={[dynamicStyles.sendButton, inputText.trim() ? dynamicStyles.sendButtonActive : null]}
               onPress={sendMessage}
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || isAiTyping}
             >
-              <Send color={inputText.trim() ? '#FFFFFF' : '#94A3B8'} size={20} />
+              <Send
+                color={inputText.trim() && !isAiTyping ? (theme === 'dark' ? '#0F172A' : '#FFFFFF') : (theme === 'dark' ? '#475569' : '#94A3B8')}
+                size={20}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -156,17 +192,18 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getDynamicStyles = (theme: 'light' | 'dark', locale: 'en' | 'ar') => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: theme === 'dark' ? '#0F172A' : '#F8FAFC',
   },
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
   },
   headerContent: {
     alignItems: 'center',
@@ -178,14 +215,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     marginBottom: 8,
   },
+  typingIndicator: {
+    backgroundColor: '#F59E0B',
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#0F172A',
+    color: theme === 'dark' ? '#F1F5F9' : '#0F172A',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#64748B',
+    color: theme === 'dark' ? '#94A3B8' : '#64748B',
     marginTop: 2,
   },
   chatContainer: {
@@ -193,95 +233,77 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     flex: 1,
+    transform: [{ scaleX: locale === 'ar' ? -1 : 1 }],
   },
   messagesContent: {
     paddingVertical: 16,
   },
-  messageContainer: {
-    flexDirection: 'row',
-    marginVertical: 4,
-    paddingHorizontal: 16,
-  },
-  userMessage: {
-    justifyContent: 'flex-end',
-  },
-  aiMessage: {
-    justifyContent: 'flex-start',
-  },
-  aiAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E2E8F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 4,
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
-  },
-  userBubble: {
-    backgroundColor: '#1E40AF',
-    borderBottomRightRadius: 4,
-  },
-  aiBubble: {
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  userText: {
-    color: '#FFFFFF',
-  },
-  aiText: {
-    color: '#0F172A',
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 4,
-    textAlign: 'right',
-  },
   inputContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
   },
   inputWrapper: {
-    flexDirection: 'row',
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: theme === 'dark' ? '#0F172A' : '#F1F5F9',
     borderRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
   },
   textInput: {
     flex: 1,
     fontSize: 16,
-    color: '#0F172A',
+    color: theme === 'dark' ? '#E2E8F0' : '#0F172A',
     maxHeight: 100,
-    paddingVertical: 8,
+    paddingVertical: Platform.OS === 'ios' ? 6 : 4,
+    writingDirection: locale === 'ar' ? 'rtl' : 'ltr',
   },
   sendButton: {
-    marginLeft: 12,
+    marginLeft: locale === 'ar' ? 0 : 12,
+    marginRight: locale === 'ar' ? 12 : 0,
     padding: 8,
     borderRadius: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 36,
+    height: 36,
   },
   sendButtonActive: {
-    backgroundColor: '#1E40AF',
+    backgroundColor: theme === 'dark' ? '#A5B4FC' : '#1E40AF',
+  },
+  typingBubbleContainer: {
+    flexDirection: locale === 'ar' ? 'row-reverse' : 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    transform: [{ scaleX: locale === 'ar' ? -1 : 1 }],
+  },
+  aiAvatarSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: locale === 'ar' ? 0 : 8,
+    marginLeft: locale === 'ar' ? 8 : 0,
+  },
+  typingBubble: {
+    backgroundColor: theme === 'dark' ? '#1E293B' : '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderBottomLeftRadius: locale === 'ar' ? 16 : 4,
+    borderBottomRightRadius: locale === 'ar' ? 4 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
 });
